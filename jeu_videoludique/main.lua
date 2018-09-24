@@ -23,7 +23,6 @@ local tilesets = {
 local mapTable
 local Q = {}
 local basicTiles = love.graphics.newImage("img/tileset/tlst.png")
-local menuNum = 0
 local conv = {b=false, n=0}
 local conv2 = {b=false, n=0}
 local actDir = "bas"
@@ -47,6 +46,8 @@ local bordureY
 local imagePerso
 local imagePersoActuelle
 local posMap = {x=0, y=0}
+local jump = {can = false, bol = true, jump = 0, goal = 0, frame = 0, pushed = false}
+local plat = {value = 0, pushed = 0}
 function math.ceil(n)
   return math.floor(n + 0.5)
 end
@@ -73,7 +74,7 @@ local changeMap = {
       timer.b = false
       posMap.x = posMap.x-1
       mapTable = require('map/m'..perso.localisation..posMap.x..'_'..posMap.y) -- on charge la bonne map
-      perso.rx = 1344-10
+      perso.rx = 1344-20
       tileset = tilesets[mapTable.tileset]
       timer.t = love.timer.getTime( )
       initAnims()
@@ -85,7 +86,7 @@ local changeMap = {
       timer.b = false
       posMap.x = posMap.x+1
       mapTable = require('map/m'..perso.localisation..posMap.x..'_'..posMap.y) -- on charge la bonne map
-      perso.rx = 10
+      perso.rx = 20
       tileset = tilesets[mapTable.tileset]
       timer.t = love.timer.getTime( )
       initAnims()
@@ -97,7 +98,7 @@ local changeMap = {
       timer.b = false
       posMap.y = posMap.y-1
       mapTable = require('map/m'..perso.localisation..posMap.x..'_'..posMap.y) -- on charge la bonne map
-      perso.ry = 768-10
+      perso.ry = 768-20
       tileset = tilesets[mapTable.tileset]
       timer.t = love.timer.getTime()
       initAnims()
@@ -109,7 +110,7 @@ local changeMap = {
       timer.b = false
       posMap.y = posMap.y+1
       mapTable = require('map/m'..perso.localisation..posMap.x..'_'..posMap.y) -- on charge la bonne map
-      perso.ry = 10
+      perso.ry = 20
       tileset = tilesets[mapTable.tileset]
       timer.t = love.timer.getTime( )
       initAnims()
@@ -119,12 +120,15 @@ local changeMap = {
   }
 
 
-local collision = function (dir)
+local collision = function (dir, dif)
+  if dif == nil then
+    dif = 0
+  end
   local ligne
   local colonne
   if dir == "bas" then
     ligne = (math.ceil((perso.rx+25) / 32))
-    colonne = (math.ceil((perso.ry+17) / 32))
+    colonne = (math.ceil((perso.ry+17+dif) / 32))
     if colonne > 24 then
       return true 
     end
@@ -139,7 +143,7 @@ local collision = function (dir)
   end
   if dir == "haut" then
     ligne = (math.ceil((perso.rx+25) / 32))
-    colonne = (math.floor((perso.ry-0) / 32))
+    colonne = (math.floor((perso.ry-0+dif) / 32))
     if colonne < 1 then
       return true 
     end
@@ -154,7 +158,7 @@ local collision = function (dir)
   end
   if dir == "gauche" then
     ligne = (math.floor((perso.rx+25) / 32))
-    colonne = (math.ceil((perso.ry+13) / 32))
+    colonne = (math.ceil((perso.ry+13+dif) / 32))
     if ligne < 1 then
       return true 
     end
@@ -165,11 +169,11 @@ local collision = function (dir)
         end
       end
     end
-    colonne = (math.ceil((perso.ry-13) / 32))
+    colonne = (math.ceil((perso.ry-13+dif) / 32))
   end
   if dir == "droite" then
     ligne = (math.ceil((perso.rx+50) / 32)) 
-    colonne = (math.ceil((perso.ry+13) / 32))
+    colonne = (math.ceil((perso.ry+13+dif) / 32))
     if ligne > 42 then
       return true 
     end
@@ -180,7 +184,7 @@ local collision = function (dir)
         end
       end
     end
-    colonne = (math.ceil((perso.ry-13) / 32))
+    colonne = (math.ceil((perso.ry-13+dif) / 32))
   end
   if timer.b == false then 
     return false
@@ -222,7 +226,7 @@ function love.load()
     perso.speed = 7
   end
   
-  if love.filesystem.exists('game.sav') == false then
+  if love.filesystem.getInfo('game.sav') == nil then
     perso.ry = 500
     objectToSave = {perso = perso, posMap = posMap}
     love.filesystem.write('game.sav', Tserial.pack(objectToSave) )
@@ -281,101 +285,228 @@ function love.update(dt)
       end
     end
     for numX=1, #mapTable.zone do 
-        if (mapTable.zone[numX].x1 < perso.rx and mapTable.zone[numX].x2 > perso.rx and mapTable.zone[numX].y1 < perso.ry and mapTable.zone[numX].y2 > perso.ry) then
-          if mapTable.zone[numX].conv[1] ~= "none" then 
-            if mapTable.zone[numX].bloquant == true then
-              conv.conv = mapTable.zone[numX]
-              conv.b = true
-              conv.n = 1
-            else
-              conv2.conv = mapTable.zone[numX]
-              conv2.b = true
-              conv2.n = 1
-            end
+      if (mapTable.zone[numX].x1 < perso.rx and mapTable.zone[numX].x2 > perso.rx and mapTable.zone[numX].y1 < perso.ry and mapTable.zone[numX].y2 > perso.ry) then
+        if mapTable.zone[numX].conv[1] ~= "none" then 
+          if mapTable.zone[numX].bloquant == true then
+            conv.conv = mapTable.zone[numX]
+            conv.b = true
+            conv.n = 1
+          else
+            conv2.conv = mapTable.zone[numX]
+            conv2.b = true
+            conv2.n = 1
           end
-          if (mapTable.zone[numX].monture.b == true) then
-            if mapTable.zone[numX].monture.src ~= "root" then
-              montureBoolean = true
-              if mapTable.zone[numX].monture.taille == 1 then
-                montureBoolean = false
-                animationActuelle = animation
-                imagePersoActuelle = {sprite = love.graphics.newImage(mapTable.zone[numX].monture.src), frame = QS96.AV[1]}
-              elseif mapTable.zone[numX].monture.taille == 2 then
-                animationActuelle = animationMonture
-                imagePersoActuelle = {sprite = love.graphics.newImage(mapTable.zone[numX].monture.src), frame = montureQ.AV[1]}
-              end
-              perso.speed = mapTable.zone[numX].monture.speed
-            else 
+        end
+        if (mapTable.zone[numX].monture.b == true) then
+          if mapTable.zone[numX].monture.src ~= "root" then
+            montureBoolean = true
+            if mapTable.zone[numX].monture.taille == 1 then
               montureBoolean = false
-              imagePersoActuelle = imagePerso
               animationActuelle = animation
-              perso.speed = 4
-	      	if winWidth > 1500 then
-    			perso.speed = 7
-  		elseif winWidth > 2000 then
-    			perso.speed = 7
-  		end
+              imagePersoActuelle = {sprite = love.graphics.newImage(mapTable.zone[numX].monture.src), frame = QS96.AV[1]}
+            elseif mapTable.zone[numX].monture.taille == 2 then
+              animationActuelle = animationMonture
+              imagePersoActuelle = {sprite = love.graphics.newImage(mapTable.zone[numX].monture.src), frame = montureQ.AV[1]}
             end
+            perso.speed = mapTable.zone[numX].monture.speed
+          else 
+            montureBoolean = false
+            imagePersoActuelle = imagePerso
+            animationActuelle = animation
+            perso.speed = 4
+      	    if winWidth > 1500 then
+  			       perso.speed = 7
+		        elseif winWidth > 2000 then
+  			       perso.speed = 7
+		        end
           end
-        else
-          conv2.b = false
+        end
+      else
+        conv2.b = false
+      end
+    end
+    if mapTable.mapType == "rpg" then
+      if love.keyboard.isDown('left', 'q') and collision("gauche")==true then
+        if bool.ani.G == false then
+          bool.ani.G = true
+        end
+        bool.move = true
+        KEY = "G"
+        debloc.g = true
+        debloc.d = false
+        debloc.h = false
+        debloc.b = false
+        perso.rx = perso.rx - perso.speed
+        if  perso.rx < 10 then 
+          changeMap.gauche()
+        end
+      elseif love.keyboard.isDown('right', 'd') and collision("droite")==true then
+        if bool.ani.D == false then 
+          bool.ani.D = true
+        end
+        KEY = "D"
+        debloc.g = false
+        debloc.d = true
+        debloc.h = false
+        debloc.b = false
+        bool.move = true
+        perso.rx = perso.rx + perso.speed
+        if  perso.rx > (1344-10) then 
+          changeMap.droite()
+        end
+      elseif love.keyboard.isDown('up', 'z') and collision("haut")==true then
+        if bool.ani.AR == false then 
+          bool.ani.AR = true
+        end
+        bool.move = true
+        KEY = "AR"
+        debloc.g = false
+        debloc.d = false
+        debloc.h = true
+        debloc.b = false
+        perso.ry = perso.ry - perso.speed
+        if perso.ry < 10 then 
+          changeMap.haut()
+        end
+      elseif love.keyboard.isDown('down', 's') and collision("bas")==true then
+        if bool.ani.AV == false then 
+          bool.ani.AV = true
+        end
+        bool.move = true
+        KEY = "AV"
+        debloc.g = false
+        debloc.d = false
+        debloc.h = false
+        debloc.b = true
+        perso.ry = perso.ry + perso.speed
+        if perso.ry > (768-10) then 
+          changeMap.bas()
         end
       end
-    if love.keyboard.isDown('left', 'q') and collision("gauche")==true then
-      if bool.ani.G == false then
-        bool.ani.G = true
+
+
+    elseif mapTable.mapType == "platformer" then
+      -- platformer controls are here
+      if love.keyboard.isDown('up', 'z') and collision("haut")==true and love.keyboard.isDown('right', 'd') then
+        if jump.can and jump.pushed == false then
+          jump.pushed = true
+          jump.bol = true
+          jump.goal = 20
+          jump.jump = 10
+          jump.can = false
+          perso.ry = perso.ry - 10
+        end
+        plat.pushed = plat.pushed + 1
+        plat.value = 42
+      elseif love.keyboard.isDown('up', 'z') and collision("haut")==true and love.keyboard.isDown('left', 'q') then
+        if jump.can and jump.pushed == false then
+          jump.pushed = true
+          jump.bol = true
+          jump.goal = 20
+          jump.jump = 10
+          jump.can = false
+          perso.ry = perso.ry - 10
+        end
+        plat.pushed = plat.pushed + 1
+        plat.value = -42
+      elseif love.keyboard.isDown('up', 'z') and collision("haut")==true then
+        if jump.can and jump.pushed == false then
+          jump.pushed = true
+          jump.bol = true
+          jump.goal = 20
+          jump.jump = 10
+          jump.can = false
+          perso.ry = perso.ry - 10
+        end
+      elseif love.keyboard.isDown('right', 'd') then
+        plat.pushed = plat.pushed + 1
+        plat.value = 42
+      elseif love.keyboard.isDown('left', 'q') then
+        plat.pushed = plat.pushed + 1
+        plat.value = -42
+      elseif love.keyboard.isDown('down', 's') and collision("bas")==true then
+        
       end
-      bool.move = true
-      KEY = "G"
-      debloc.g = true
-      debloc.d = false
-      debloc.h = false
-      debloc.b = false
-      perso.rx = perso.rx - perso.speed
-      if  perso.rx < 10 then 
-        changeMap.gauche()
+
+      if collision("haut", 0) == true then
+        jump.frame = jump.frame + 1
+
+        if jump.can == false then
+          if jump.frame % 1 == 0  then --every 3 frames
+            if jump.bol then
+              jump.can = false -- make sure that user cant do an easy double jump
+              if jump.jump < jump.goal then
+                jump.jump = jump.jump + 2
+              else 
+                jump.bol = false
+              end
+            else
+              if jump.jump > 0 then
+                jump.jump = jump.jump - 2
+              else
+                jump.bol = true
+                jump.jump = 0
+                jump.goal = 0   --reset jump settings
+              end
+            end
+          end
+        end
+        perso.ry = perso.ry - jump.jump
+      else 
+        jump.bol = true
+        jump.jump = 0
+        jump.goal = 0
+        jump.can = false
       end
-    elseif love.keyboard.isDown('right', 'd') and collision("droite")==true then
-      if bool.ani.D == false then 
-        bool.ani.D = true
+
+      if plat.value < 0 then                      -- go left or right if user pushed the keys
+        if collision("gauche", 0)==true then
+          if bool.ani.G == false then
+            bool.ani.G = true
+          end
+          bool.move = true
+          KEY = "G"
+          debloc.g = true
+          debloc.d = false
+          debloc.h = false
+          debloc.b = false
+          perso.rx = perso.rx - perso.speed
+          if  perso.rx < 10 then 
+            changeMap.gauche()
+          end
+        end
+      elseif plat.value > 0 then
+        if collision("droite", 0)==true then
+          if bool.ani.D == false then 
+            bool.ani.D = true
+          end
+          KEY = "D"
+          debloc.g = false
+          debloc.d = true
+          debloc.h = false
+          debloc.b = false
+          bool.move = true
+          perso.rx = perso.rx + perso.speed
+          if  perso.rx > (1344-10) then 
+            changeMap.droite()
+          end
+        end
       end
-      KEY = "D"
-      debloc.g = false
-      debloc.d = true
-      debloc.h = false
-      debloc.b = false
-      bool.move = true
-      perso.rx = perso.rx + perso.speed
-      if  perso.rx > (1344-10) then 
-        changeMap.droite()
-      end
-    elseif love.keyboard.isDown('up', 'z') and collision("haut")==true then
-      if bool.ani.AR == false then 
-        bool.ani.AR = true
-      end
-      bool.move = true
-      KEY = "AR"
-      debloc.g = false
-      debloc.d = false
-      debloc.h = true
-      debloc.b = false
-      perso.ry = perso.ry - perso.speed
-      if perso.ry < 10 then 
-        changeMap.haut()
-      end
-    elseif love.keyboard.isDown('down', 's') and collision("bas")==true then
-      if bool.ani.AV == false then 
-        bool.ani.AV = true
-      end
-      bool.move = true
-      KEY = "AV"
-      debloc.g = false
-      debloc.d = false
-      debloc.h = false
-      debloc.b = true
-      perso.ry = perso.ry + perso.speed
-      if perso.ry > (768-10) then 
-        changeMap.bas()
+
+      local i = 0
+      while i < 7 do
+        if collision("bas", -3)==true then
+          perso.ry = perso.ry + 1        
+          jump.can = false -- if the user falls he can't jump
+          if perso.ry > (768-10) then 
+            changeMap.bas()
+          end
+        else 
+          if jump.jump == 0 then
+            jump.can = true -- if the user is down then he can jump again
+          end
+        end
+        i = i+1
       end
     end
   end
@@ -549,8 +680,7 @@ function love.keypressed(key)
     actDir = "bas"
   end
   if key == "x" then
-    menuNum = menuNum + 1
-    if menuNum%2 == 1 then
+    if menu == false then
       menu = true
     else
       menu = false
@@ -681,6 +811,7 @@ function love.keyreleased(key)
         imagePersoActuelle.frame = montureQ.D[1]
       end
     elseif key == 'up' or key == 'z' then
+      jump.pushed = false
       bool.move = false
       if debloc.h == true then
         perso.ry = perso.ry +1
@@ -700,6 +831,21 @@ function love.keyreleased(key)
       else
         imagePersoActuelle.frame = montureQ.AV[1]
       end
+    end
+  end
+
+
+  if mapTable.mapType == "platformer" then
+    if key == 'down' or key == 's' then
+
+    elseif key == 'up' or key == 'z' then
+
+    elseif key == 'right' or key == 'd' then
+      plat.pushed = plat.pushed -1
+      plat.value = 0
+    elseif key == 'left' or key == 'q' then
+      plat.pushed = plat.pushed -1
+      plat.value = 0
     end
   end
 end
